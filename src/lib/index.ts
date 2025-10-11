@@ -445,7 +445,7 @@ export const addPopup = (map: maplibregl.Map) => {
 		variable = get(variables)[0];
 		colorScale = getColorScale(get(variables)[0].value);
 
-		removeMarker(map);
+		removeMarker();
 		addMarker(map, e);
 
 		//showPopup = !showPopup;  //skip popup

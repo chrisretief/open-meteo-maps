@@ -106,6 +106,7 @@ function getData(lat, lng, time = new Date()) {
 	let v = get(variables);
 	let { label } = v[0];
 	let lvl = label.split(' ')[1];
+    if (!lvl || !(lvl.includes("hPa") || lvl.includes("10m"))) lvl="10m";
 
 	let variable = {
 		value: 'wind_u_component_' + lvl,
