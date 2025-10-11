@@ -57,6 +57,8 @@
 		checkClosestDomainInterval
 	} from '$lib';
 
+	import {initTrajModule} from '../traj.js';
+
 	import '../styles.css';
 	import HelpDialog from '$lib/components/help/help-dialog.svelte';
 
@@ -104,6 +106,8 @@
 			map.addControl(new HillshadeButton(map, url));
 
 			addPopup(map);
+
+			initTrajModule(map);
 		});
 
 		map.on('zoomend', () => {

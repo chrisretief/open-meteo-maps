@@ -10,6 +10,8 @@ import * as maplibregl from 'maplibre-gl';
 
 import { pushState } from '$app/navigation';
 
+import {addMarker, removeMarker, initTrajModule} from '../traj';
+
 import {
 	time,
 	loading,
@@ -374,7 +376,6 @@ export const changeOMfileURL = (
 
 		omUrl = getOMUrl();
 		omFileSource.setUrl('om://' + omUrl);
-
 		checkSourceLoadedInterval = setInterval(() => {
 			checked++;
 			if ((omFileSource && omFileSource.loaded()) || checked >= 200) {
@@ -444,7 +445,10 @@ export const addPopup = (map: maplibregl.Map) => {
 		variable = get(variables)[0];
 		colorScale = getColorScale(get(variables)[0].value);
 
-		showPopup = !showPopup;
+		removeMarker(map);
+		addMarker(map, e);
+
+		//showPopup = !showPopup;  //skip popup
 		if (!showPopup && popup) {
 			popup.remove();
 		}
