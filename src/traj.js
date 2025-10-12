@@ -2,7 +2,7 @@
 
 import * as maplibregl from 'maplibre-gl';
 import { OmFileReader, MemoryHttpBackend, OmDataType } from '@openmeteo/file-reader';
-import { omProtocol } from './om-protocol';
+import { getValueFromLatLong } from './om-protocol';
 
 import { domainOptions } from './lib/utils/domains';
 import { variableOptions } from './lib/utils/variables';
@@ -11,6 +11,7 @@ import { OMapsFileReader } from './omaps-reader';
 import { interpolateLinear } from './lib/utils/interpolations';
 import { get } from 'svelte/store';
 import LatLon from 'geodesy/latlon-spherical.js';
+import { getColorScale } from '$lib/utils/color-scales';
 
 import {
 	time as t,
@@ -24,7 +25,8 @@ import {
 	paddedBoundsLayer,
 	paddedBoundsSource as pBS,
 	paddedBoundsGeoJSON,
-	variableSelectionExtended
+	variableSelectionExtended,
+	trajSettings
 } from './lib/stores/preferences';
 
 let samples = 72; // 6 hours
@@ -43,6 +45,8 @@ let h1 = 60 * 60 * 1000;
 let lastTrajTime = 0;
 let maxSegs = 120; // 120 hours
 const dataCache = [];
+let trajRunning = false,
+	stopTraj = false;
 
 function initTrajModule(m) {
 	map = m;
@@ -106,14 +110,14 @@ function getData(lat, lng, time = new Date()) {
 	let v = get(variables);
 	let { label } = v[0];
 	let lvl = label.split(' ')[1];
-    if (!lvl || !(lvl.includes("hPa") || lvl.includes("10m"))) lvl="10m";
+	if (!lvl || !(lvl.includes('hPa') || lvl.includes('10m'))) lvl = '10m';
 
 	let variable = {
 		value: 'wind_u_component_' + lvl,
 		label
 	};
 
-	let bounds = [lat - 5, lng - 5, lat + 5, lng + 5];
+	let bounds = [lat - 2, lng - 2, lat + 2, lng + 2];
 
 	let boundsIndexes = getIndicesFromBounds(bounds[0], bounds[1], bounds[2], bounds[3], domain);
 	let ranges = [
@@ -124,27 +128,34 @@ function getData(lat, lng, time = new Date()) {
 	if (!myOmapsFileReader) {
 		myOmapsFileReader = new OMapsFileReader(domain, true);
 	}
-	myOmapsFileReader.setReaderData(domain, true);
-	return myOmapsFileReader
-		.init(url)
-		.then(() => {
-			return myOmapsFileReader.readVariable(variable, ranges).then((values) => {
-				data.data = values;
-				data.ranges = ranges;
-				data.bounds = bounds;
-				data.model = domain.label;
-				data.time = new Date(timeStr.slice(0, -2) + ':00' + 'Z');
-				dataCache.push(data);
-				activeData = data;
-				return activeData;
+	let t = Date.now();
+	//log('Start', t);
+	return new Promise((res, rej) => {
+		setTimeout(() => {
+			myOmapsFileReader.setReaderData(domain, true);
+			myOmapsFileReader
+				.init(url)
+				.then(() => {
+					return myOmapsFileReader.readVariable(variable, ranges).then((values) => {
+						//log('Done', Date.now() - t);
+						data.data = values;
+						data.ranges = ranges;
+						data.bounds = bounds;
+						data.model = domain.label;
+						data.time = new Date(timeStr.slice(0, -2) + ':00' + 'Z');
+						dataCache.push(data);
+						activeData = data;
+						res(activeData);
 
-				// prefetch first bytes of the previous and next timesteps to trigger CF caching  ??????? what does this do:
-				myOmapsFileReader.prefetch(omUrl);
-			});
-		})
-		.catch((e) => {
-			console.log(e);
-		});
+						// prefetch first bytes of the previous and next timesteps to trigger CF caching  ??????? what does this do:
+						//myOmapsFileReader.prefetch(omUrl);
+					});
+				})
+				.catch((e) => {
+					console.log(e);
+				});
+		}, 50);
+	});
 }
 
 function drawLine(points, ix, previ, i) {
@@ -183,38 +194,80 @@ function getSpeedAndDir(data, lat, lng) {
 	return { speed, dir };
 }
 
-function drawTraj(lat, lng, time) {
+function drawTraj(lat, lng, time, tries = 0) {
+	if (trajRunning) {
+		stopTraj = true;
+		setTimeout(() => {
+			if (tries < 10) drawTraj(lat, lng, time, tries + 1);
+			else {
+				trajRunning = false;
+				stopTraj = false;
+			}
+		}, 500);
+
+		return;
+	}
+
+	let outOfBounds = false;
+	trajRunning = true;
 	resetLines();
 	if (Date.now() - lastTrajTime < 1000) return;
 	lastTrajTime = Date.now();
 	let startIx = floor(time / h1);
 	let prevIx = startIx;
 	let previ = 0;
+
+	let samples = get(trajSettings).duration * 12;
+
 	return new Promise((res, rej) => {
 		let points = [new LatLon(lat, lng)];
 		const nextPoint = (i, p, time) => {
 			getData(p.lat, p.lng, time).then((data) => {
 				let { speed, dir } = getSpeedAndDir(data, p.lat, p.lng);
+				//log(speed, dir);
+				let p2;
+				if (isNaN(speed) || isNaN(dir)) {
+					stopTraj = true;
+					outOfBounds = true;
+				} else {
+					p2 = p.destinationPoint(speed * interval, dir);
+					points.push(p2);
 
-				let p2 = p.destinationPoint(speed * interval, dir);
-				points.push(p2);
-
-				let newTime = new Date(+time + interval * 1000);
-				let newIx = floor(newTime / h1);
-				if (newIx > prevIx || i == samples) {  // if in the next hour,  change line style
-					drawLine(points, prevIx - startIx, previ, i);
-					prevIx = newIx;
-					previ = i;
+					let newTime = new Date(+time + interval * 1000);
+					let newIx = floor(newTime / h1);
+					if (newIx > prevIx || i == samples) {
+						// if in the next hour,  change line style
+						drawLine(points, prevIx - startIx, previ, i);
+						document.querySelector('#traj-progress').innerHTML =
+							`Progress: ${((100 * i) / samples).toFixed(0)}%`;
+						prevIx = newIx;
+						previ = i;
+					}
 				}
-				if (i < samples) {
+				if (i < samples && !stopTraj) {
 					nextPoint(i + 1, p2, new Date(+time + interval * 1000));
-				} else res(points);
+				} else {
+					let msg = stopTraj
+						? outOfBounds
+							? 'Out of Bounds'
+							: 'Interrupted'
+						: `Progress: ${((100 * i) / samples).toFixed(0)}%`;
+					if (!stopTraj)
+						setTimeout(
+							() => (document.querySelector('#traj-progress').innerHTML = 'Progress:'),
+							2000
+						);
+					stopTraj = false;
+					trajRunning = false;
+					res(points);
+					document.querySelector('#traj-progress').innerHTML = msg;
+				}
 			});
 		};
 
 		nextPoint(0, points[0], time);
 	}).then((points) => {
-		console.log('DONE');
+		//console.log('ALL DONE');
 	});
 }
 
@@ -235,13 +288,19 @@ function addMarker(map, e) {
 		const { lat, lng } = marker.getLngLat();
 		getData(lat, lng, get(t)).then((data) => {
 			let { speed, dir } = getSpeedAndDir(data, lat, lng);
-			el.firstElementChild.innerHTML = `
+			let variable = get(variables)[0];
+			let text = `
                 Wind: ${speed.toFixed(1)}m/s <br>
                 Dir: ${((dir + 180) % 360).toFixed(0)}
             `;
-		});
+			if (!variable.value.includes('Wind')) {
+				let colorScale = getColorScale(variable.value);
+				let { value } = getValueFromLatLong(lat, lng, colorScale);
+				text += '<br>' + value.toFixed(1) + colorScale.unit;
+			}
 
-		drawTraj(lat, lng, get(t));
+			el.firstElementChild.innerHTML = text;
+		});
 	}
 
 	marker.on('drag', updateCoords);
@@ -260,4 +319,4 @@ function lngLatToTile(lng, lat, z) {
 	return { x, y, z };
 }
 
-export { addMarker, removeMarker, initTrajModule };
+export { addMarker, removeMarker, initTrajModule, drawTraj };

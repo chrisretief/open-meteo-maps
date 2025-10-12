@@ -15,6 +15,10 @@ export const preferences = persisted('preferences', {
 	timeSelector: true
 });
 
+export const trajSettings = persisted('trajSettings', {
+	duration: 6
+});
+
 export const domain = persisted(
 	'domain',
 	domainOptions.find((dm) => dm.value === import.meta.env.VITE_DOMAIN) ?? domainOptions[0]

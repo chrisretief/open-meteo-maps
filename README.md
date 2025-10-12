@@ -1,4 +1,12 @@
-# Open-Meteo Maps
+# Open-Meteo Maps - Traj
+
+This fork creates wind trajectories using open-meteo spatial data.
+
+Click on the map to draw a trajectory.  The currently selected pressure level is used,  or it defaults to 10m.  The trajectory duration can be selected at the top left.  
+
+![trajectory example](./static/trajexample.png)
+
+## Original README:
 
 [![Build](https://github.com/open-meteo/maps/actions/workflows/build.yml/badge.svg)](https://github.com/open-meteo/maps/actions/workflows/build.yml) [![GitHub license](https://img.shields.io/github/license/open-meteo/maps)](https://github.com/open-meteo/maps/blob/main/LICENSE)
 

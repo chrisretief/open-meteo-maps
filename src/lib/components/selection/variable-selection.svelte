@@ -28,6 +28,8 @@
 	import type { Domain, DomainMetaData, Variables } from '$lib/types';
 	import { pushState } from '$app/navigation';
 
+	import Traj from '$lib/components/traj/traj.svelte';
+
 	interface Props {
 		url: URL;
 		map: Map;
@@ -327,8 +329,10 @@
 					</Command.Root>
 				</Popover.Content>
 			</Popover.Root>
+			<Traj />
 		</div>
 	{/await}
+
 
 	<button
 		style="box-shadow: rgba(0, 0, 0, 0.1) 0px 0px 0px 2px;"

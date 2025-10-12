@@ -10,7 +10,7 @@ import * as maplibregl from 'maplibre-gl';
 
 import { pushState } from '$app/navigation';
 
-import {addMarker, removeMarker, initTrajModule} from '../traj';
+import {addMarker, removeMarker, drawTraj} from '../traj';
 
 import {
 	time,
@@ -447,7 +447,9 @@ export const addPopup = (map: maplibregl.Map) => {
 
 		removeMarker();
 		addMarker(map, e);
+		drawTraj(e.lngLat.lat, e.lngLat.lng, get(time));
 
+		//ignore the previous popup
 		//showPopup = !showPopup;  //skip popup
 		if (!showPopup && popup) {
 			popup.remove();

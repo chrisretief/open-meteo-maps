@@ -22,7 +22,7 @@
 			class="flex flex-col-reverse overflow-hidden rounded-[4px]"
 		>
 			<div class="flex max-h-[270px] flex-col">
-				{#each colorScale.colors as cs, i (i)}
+				{#each [...colorScale.colors].reverse()  as cs, i (i)}
 					<div
 						style={'background: rgba(' +
 							cs.join(',') +
